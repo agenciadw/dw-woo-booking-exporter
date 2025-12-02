@@ -1,0 +1,308 @@
+# Copyright (C) 2024 WooCommerce Booking Exporter
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: WooCommerce Booking Exporter 1.7.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/woocommerce-booking-exporter\n"
+"POT-Creation-Date: 2024-12-02 12:00:00+00:00\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: 2024-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"X-Generator: WordPress\n"
+
+#: woocommerce-booking-exporter.php
+msgid "Booking Email"
+msgstr ""
+
+msgid "That's a booking report."
+msgstr ""
+
+#: includes/WBE.php
+msgid "Woocommerce Booking Exporter"
+msgstr ""
+
+msgid "Booking Exporter"
+msgstr ""
+
+msgid "Weekly"
+msgstr ""
+
+msgid "monthly"
+msgstr ""
+
+msgid "WooCommerce Booking Exporter requires WooCommerce and WooCommerce Booking to be installed!"
+msgstr ""
+
+msgid "Você não tem permissão para acessar esta página."
+msgstr ""
+
+msgid "Erro de segurança. Por favor, recarregue a página e tente novamente."
+msgstr ""
+
+msgid "Erro ao processar os campos selecionados. Por favor, tente novamente."
+msgstr ""
+
+msgid "Ocorreu um erro. Por favor, tente novamente."
+msgstr ""
+
+msgid "Operação realizada com sucesso!"
+msgstr ""
+
+msgid "N/A"
+msgstr ""
+
+msgid "ID do Pedido"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Nota do Cliente"
+msgstr ""
+
+msgid "Nota Fornecida pelo Cliente"
+msgstr ""
+
+msgid "Subtotais do Pedido"
+msgstr ""
+
+msgid "Totais do Pedido"
+msgstr ""
+
+msgid "Cupons"
+msgstr ""
+
+msgid "Primeiro Nome de Cobrança"
+msgstr ""
+
+msgid "Último Nome de Cobrança"
+msgstr ""
+
+msgid "Nome da Empresa de Cobrança"
+msgstr ""
+
+msgid "Endereço de Cobrança 1"
+msgstr ""
+
+msgid "Endereço de Cobrança 2"
+msgstr ""
+
+msgid "Telefone de Cobrança"
+msgstr ""
+
+msgid "CEP de Cobrança"
+msgstr ""
+
+msgid "Cidade de Cobrança"
+msgstr ""
+
+msgid "Estado de Cobrança"
+msgstr ""
+
+msgid "País de Cobrança"
+msgstr ""
+
+msgid "Primeiro Nome de Envio"
+msgstr ""
+
+msgid "Último Nome de Envio"
+msgstr ""
+
+msgid "Nome da Empresa de Envio"
+msgstr ""
+
+msgid "Endereço de Envio 1"
+msgstr ""
+
+msgid "Endereço de Envio 2"
+msgstr ""
+
+msgid "Telefone de Envio"
+msgstr ""
+
+msgid "CEP de Envio"
+msgstr ""
+
+msgid "Cidade de Envio"
+msgstr ""
+
+msgid "Estado de Envio"
+msgstr ""
+
+msgid "País de Envio"
+msgstr ""
+
+msgid "Custo de Envio"
+msgstr ""
+
+msgid "ID do Produto"
+msgstr ""
+
+msgid "Nome do Produto"
+msgstr ""
+
+msgid "SKU do Produto"
+msgstr ""
+
+msgid "Recursos do Produto"
+msgstr ""
+
+msgid "Método de Pagamento"
+msgstr ""
+
+msgid "Título do Método de Pagamento"
+msgstr ""
+
+msgid "Data de Pagamento do Pedido"
+msgstr ""
+
+msgid "Detalhes Adicionais"
+msgstr ""
+
+msgid "Product Vendor"
+msgstr ""
+
+msgid "ID da Reserva"
+msgstr ""
+
+msgid "Informações da Pessoa"
+msgstr ""
+
+msgid "Data de Início da Reserva"
+msgstr ""
+
+msgid "Data de Término da Reserva"
+msgstr ""
+
+msgid "User ID"
+msgstr ""
+
+msgid "Email"
+msgstr ""
+
+msgid "Username"
+msgstr ""
+
+msgid "User Roles"
+msgstr ""
+
+msgid "Failed to read file content"
+msgstr ""
+
+msgid "Please upload import file."
+msgstr ""
+
+#: templates/booking-exporter-tab.php
+msgid "Filter exported data"
+msgstr ""
+
+msgid "There are no bookings that match your filter!"
+msgstr ""
+
+msgid "Categories"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "Products"
+msgstr ""
+
+msgid "Users"
+msgstr ""
+
+msgid "Vendors"
+msgstr ""
+
+msgid "Delimiter"
+msgstr ""
+
+msgid "By Default \",\" is delimiter"
+msgstr ""
+
+msgid "From date"
+msgstr ""
+
+msgid "To date"
+msgstr ""
+
+msgid "Choose the data you want to export"
+msgstr ""
+
+msgid "Select All"
+msgstr ""
+
+msgid "Checkout Field Editor Fields"
+msgstr ""
+
+msgid "Billing Fields"
+msgstr ""
+
+msgid "Shipping Fields"
+msgstr ""
+
+msgid "Additional Fields"
+msgstr ""
+
+msgid "Order"
+msgstr ""
+
+msgid "Pedido"
+msgstr ""
+
+msgid "Observações do Pedido"
+msgstr ""
+
+msgid "Subtotal do Pedido"
+msgstr ""
+
+msgid "Total do Pedido"
+msgstr ""
+
+msgid "Product"
+msgstr ""
+
+msgid "Product Add-ons"
+msgstr ""
+
+msgid "Booking"
+msgstr ""
+
+msgid "Responsável pela Reserva"
+msgstr ""
+
+msgid "User"
+msgstr ""
+
+msgid "Save settings as a template"
+msgstr ""
+
+msgid "Enter template name"
+msgstr ""
+
+msgid "Save Template"
+msgstr ""
+
+msgid "Load Template"
+msgstr ""
+
+msgid "Export CSV"
+msgstr ""
+
+msgid "Export Excel"
+msgstr ""
+
+msgid "Export PDF"
+msgstr ""
+
+msgid "Export CSV (1000+)"
+msgstr ""
+
+msgid "Ok"
+msgstr ""
+
+msgid "Please Enter Field Name"
+msgstr ""
