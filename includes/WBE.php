@@ -384,9 +384,19 @@ if (!class_exists('WBE')) {
         }
         public function wbe_download_csv()
         {
-            // Security check: verify user has permission
+            // Only run security checks if this is actually an export action from our plugin
+            if (!isset($_POST['action'])) {
+                return;
+            }
+
+            // Security check: verify user has permission only for our plugin actions
             if (!current_user_can('manage_woocommerce')) {
-                wp_die(esc_html__('Você não tem permissão para acessar esta página.', 'wbe-exporter'));
+                // Only block if this is one of our plugin's actions
+                $plugin_actions = array('export', 'booking-exporter-export-templates', 'booking-exporter-import-templates', 'send-email-now', 'save-cronjob-email');
+                if (in_array($_POST['action'], $plugin_actions)) {
+                    wp_die(esc_html__('Você não tem permissão para acessar esta página.', 'wbe-exporter'));
+                }
+                return;
             }
 
             if (isset($_POST['action']) && $_POST['action'] == 'export') {
