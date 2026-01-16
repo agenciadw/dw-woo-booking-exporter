@@ -75,8 +75,13 @@ if (!class_exists('WBE_ajaxified') && class_exists('WBE')) {
             // add csv data
             $dataArray = array();
             $to = $from = "";
-            $prodArr = sanitize_text_field($_POST['booking_exporter_product']);
-            $userArr = sanitize_text_field($_POST['booking_exporter_user']);
+            // Ensure arrays are always arrays, never null
+            $prodArr = isset($_POST['booking_exporter_product']) && is_array($_POST['booking_exporter_product']) 
+                ? $_POST['booking_exporter_product'] 
+                : array();
+            $userArr = isset($_POST['booking_exporter_user']) && is_array($_POST['booking_exporter_user']) 
+                ? $_POST['booking_exporter_user'] 
+                : array();
             //get from date
 			$booking_form_date = sanitize_text_field($_POST['booking_from_date']);
             if ($booking_form_date) {
@@ -139,27 +144,61 @@ if (!class_exists('WBE_ajaxified') && class_exists('WBE')) {
         }
 
         public function woo_bookings_delete_template_callback() {
-			
-            $template_name = sanitize_text_field( $_POST['template_name'] );
-            $template_name = str_replace(' ', '_', $template_name );
 
-            $saved_templates = get_option("booking_exporter_templates");
-			
-            if( isset( $template_name, $saved_templates ) ) {
-                unset($saved_templates[$template_name]);
-                update_option( 'booking_exporter_templates', $saved_templates );
-                $response = array(
-                    'success' => true,
-                    'message' => 'Template deleted',
-                    'key'     => $template_name
-                );
-            } else {
-                $response = array(
+            if (!current_user_can('manage_woocommerce')) {
+                wp_send_json(array(
                     'success' => false,
-                    'message' => 'Template not found',
-                );
+                    'message' => __('Você não tem permissão para excluir templates.', 'wbe-exporter'),
+                ), 403);
             }
-            wp_send_json( $response );
+
+            $raw_name = isset($_POST['template_name']) ? sanitize_text_field(wp_unslash($_POST['template_name'])) : '';
+            if ($raw_name === '') {
+                wp_send_json(array(
+                    'success' => false,
+                    'message' => __('Nome do template inválido.', 'wbe-exporter'),
+                ), 400);
+            }
+
+            $saved_templates = get_option("booking_exporter_templates", array());
+            if (!is_array($saved_templates)) {
+                $saved_templates = array();
+            }
+
+            // Tenta remover considerando variações comuns (espaço/underscore/slug)
+            $slug = sanitize_title($raw_name);
+            $slug_underscore = str_replace('-', '_', $slug);
+
+            $candidates = array_values(array_unique(array_filter(array(
+                $raw_name,
+                str_replace(' ', '_', $raw_name),
+                str_replace('_', ' ', $raw_name),
+                $slug,
+                $slug_underscore,
+            ))));
+
+            $deleted_key = null;
+            foreach ($candidates as $candidate) {
+                if (isset($saved_templates[$candidate])) {
+                    unset($saved_templates[$candidate]);
+                    $deleted_key = $candidate;
+                    break;
+                }
+            }
+
+            if ($deleted_key === null) {
+                wp_send_json(array(
+                    'success' => false,
+                    'message' => __('Template não encontrado.', 'wbe-exporter'),
+                ), 404);
+            }
+
+            update_option('booking_exporter_templates', $saved_templates);
+            wp_send_json(array(
+                'success' => true,
+                'message' => __('Template removido com sucesso.', 'wbe-exporter'),
+                'key'     => $deleted_key,
+            ));
 			// wp_die();
         }
         

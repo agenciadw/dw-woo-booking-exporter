@@ -83,10 +83,7 @@ jQuery(document).ready(function($) {
      * Change file type according to submitted button 
      */
     $(".booking-export-form  .submit_btn").on("click", function() {
-        if ($(this).hasClass("export_pdf")) {
-            $(".booking-export-form .file_type").val("pdf");
-            console.log('Export type: PDF');
-        } else if ($(this).hasClass("export_csv")) {
+        if ($(this).hasClass("export_csv")) {
             $(".booking-export-form .file_type").val("csv");
             console.log('Export type: CSV');
         } else if ($(this).hasClass("export_excel")) {
@@ -110,9 +107,9 @@ jQuery(document).ready(function($) {
         window.location.href = url + "&template=" + $(this).val();
     });
 
-    $("a#wbe-delete-template").on('click', function(event) {
+    jQuery(document).on('click', 'a.wbe-delete-template', function(event) {
         event.preventDefault();
-        const template_name = $(this).siblings('input').attr('name');
+        const template_name = jQuery(this).data('template') || jQuery(this).siblings('input').attr('name');
         wbe_delete_template(template_name);
     });
 });
@@ -159,14 +156,11 @@ jQuery(document).on("submit", ".import-div #imported-form", function(e) {
 });
 
 
-jQuery(document).on("click", ".ajaxified_csv_export, .ajaxified_pdf_export", function(e) {
+jQuery(document).on("click", ".ajaxified_csv_export", function(e) {
 
     e.preventDefault();
     var filetype = 'csv';
 
-    if(jQuery(this).hasClass("ajaxified_pdf_export")) {
-        filetype = 'pdf';
-    }
     woo_bookings_csv_export(1, filetype);
     jQuery("#wbe_progressbar").show();
 });
@@ -227,8 +221,8 @@ function wbe_delete_template(name) {
         success: function(response) {
 		
             if (response.success === true) {
-                var key = response.key;
-                jQuery("input[name='" + key + "']").parent().fadeOut();
+                var key = response.key || name;
+                jQuery("input[name='" + key + "']").closest('li').fadeOut();
             }
             jQuery(".export-div form").prepend('<span class="wbe-delete-template-message" style="color: green;"></span>');
             if (jQuery(".wbe-delete-template-message").length === 1) {

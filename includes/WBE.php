@@ -19,6 +19,10 @@ if (!class_exists('WBE')) {
                     add_filter('cron_schedules', array($this, 'wbe_add_new_cron_schedules'));
 
                     add_action('wp_ajax_product_filter', array($this, 'product_filter_callback'));
+                    
+                    // Clear cache when products are updated
+                    add_action('save_post_product', array($this, 'clear_products_cache'));
+                    add_action('delete_post', array($this, 'clear_products_cache'));
 
                     add_action('wbe_add_custom_fields_in_export_tab', array($this, 'wbe_add_cfe_fields_in_export_tab'));
 
@@ -214,6 +218,42 @@ if (!class_exists('WBE')) {
 
             return $custom_fields;
         }
+        /**
+         * Get cached booking products with optimized query
+         */
+        public function get_cached_booking_products() {
+            $cache_key = 'wbe_booking_products_list';
+            $products = get_transient($cache_key);
+            
+            if (false === $products) {
+                // Use optimized query - only get ID, title and status
+                global $wpdb;
+                $products = $wpdb->get_results(
+                    "SELECT p.ID, p.post_title, p.post_status 
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
+                    INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+                    INNER JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
+                    WHERE p.post_type = 'product'
+                    AND tt.taxonomy = 'product_type'
+                    AND t.slug = 'booking'
+                    ORDER BY p.post_title ASC"
+                );
+                
+                // Cache for 1 hour
+                set_transient($cache_key, $products, HOUR_IN_SECONDS);
+            }
+            
+            return $products ? $products : array();
+        }
+        
+        /**
+         * Clear products cache when needed
+         */
+        public function clear_products_cache() {
+            delete_transient('wbe_booking_products_list');
+        }
+        
         public function wbe_enqueue_scripts()
         {
             $current_screen = get_current_screen();
@@ -320,23 +360,7 @@ if (!class_exists('WBE')) {
                         ob_end_clean();
                         $attachments[] = $filename;
                     }
-                    //create pdf if exists
-                    if (in_array('pdf', $sent)) {
-                        $upload_dir = wp_upload_dir();
-                        $PdfName = $upload_dir["basedir"] . "/" . 'booking.pdf';
-                        ob_start();
-                        require_once(WBE_MODIFY_PLUGIN_PATH . "templates/pdf-template.php");
-                        $file_content = ob_get_contents();
-                        //clean buffer include mpdf
-                        ob_end_clean();
-                        include(WBE_MODIFY_PLUGIN_PATH . '/vendor/mpdf60/mpdf.php');
-                        //create pdf and download
-                        $mpdf = new mPDF('c');
-                        $mpdf->WriteHTML($file_content);
-                        $mpdf->AddPage();
-                        $mpdf->Output($PdfName, 'F');
-                        $attachments[] = $PdfName;
-                    }
+                    // PDF desativado temporariamente
                     foreach ($emails as $email) {
                         if ($email) {
                             wp_mail($email, $subject, stripslashes($content), array('Content-Type: text/html; charset=UTF-8'), $attachments);
@@ -352,17 +376,23 @@ if (!class_exists('WBE')) {
 
         public function enqueue_admin_js_date_range_picker($hook)
         {
-            // Enqueue Styles
-            wp_enqueue_style('wbe-jquery-ui', plugins_url('../css/jquery-ui.min.css', __FILE__), array(), '1.7.0');
-            wp_enqueue_style('wbe-jquery-ui-theme', plugins_url('../css/jquery-ui.theme.min.css', __FILE__), array(), '1.7.0');
-            wp_enqueue_style('wbe-chosen', plugins_url('../css/chosen.min.css', __FILE__), array(), '1.7.0');
-            wp_enqueue_style('wbe-plugin', plugins_url('../css/plugin.css', __FILE__), array(), '1.7.0');
-            wp_enqueue_style('wbe-admin-enhanced', plugins_url('../css/wbe-admin-enhanced.css', __FILE__), array(), '1.7.0');
+            // Only load on our admin page
+            if ($hook !== 'toplevel_page_booking-exporter') {
+                return;
+            }
             
-            // Enqueue Scripts
-            wp_enqueue_script('wbe-jquery-ui', plugins_url('../js/jquery-ui.min.js', __FILE__), array('jquery'), '1.7.0');
-            wp_enqueue_script('wbe-chosen', plugins_url('../js/chosen.jquery.min.js', __FILE__), array('jquery'), '1.7.0');
-            wp_enqueue_script('plugin-daterangepicker', plugins_url('../js/plugin.js', __FILE__), array('jquery'), '1.7.0', true);
+            // Enqueue Styles with version for cache busting
+            $version = '1.7.1';
+            wp_enqueue_style('wbe-jquery-ui', plugins_url('../css/jquery-ui.min.css', __FILE__), array(), $version);
+            wp_enqueue_style('wbe-jquery-ui-theme', plugins_url('../css/jquery-ui.theme.min.css', __FILE__), array(), $version);
+            wp_enqueue_style('wbe-chosen', plugins_url('../css/chosen.min.css', __FILE__), array(), $version);
+            wp_enqueue_style('wbe-plugin', plugins_url('../css/plugin.css', __FILE__), array(), $version);
+            wp_enqueue_style('wbe-admin-enhanced', plugins_url('../css/wbe-admin-enhanced.css', __FILE__), array(), $version);
+            
+            // Enqueue Scripts - load in footer for better performance
+            wp_enqueue_script('wbe-jquery-ui', plugins_url('../js/jquery-ui.min.js', __FILE__), array('jquery'), $version, true);
+            wp_enqueue_script('wbe-chosen', plugins_url('../js/chosen.jquery.min.js', __FILE__), array('jquery'), $version, true);
+            wp_enqueue_script('plugin-daterangepicker', plugins_url('../js/plugin.js', __FILE__), array('jquery', 'wbe-chosen', 'wbe-jquery-ui'), $version, true);
 
             // Localize script with security nonce
             wp_localize_script('plugin-daterangepicker', 'woo_bookings_export', array(
@@ -561,23 +591,7 @@ if (!class_exists('WBE')) {
                     ob_end_clean();
                     $attachments[] = $filename;
                 }
-                //create pdf if exists
-                if (in_array('pdf', $sent)) {
-                    $upload_dir = wp_upload_dir();
-                    $PdfName = $upload_dir["basedir"] . "/" . 'booking.pdf';
-                    ob_start();
-                    require_once(WBE_MODIFY_PLUGIN_PATH . "templates/pdf-template.php");
-                    $file_content = ob_get_contents();
-                    //clean buffer include mpdf
-                    ob_end_clean();
-                    include(WBE_MODIFY_PLUGIN_PATH . '/vendor/mpdf60/mpdf.php');
-                    //create pdf and download
-                    $mpdf = new mPDF('c');
-                    $mpdf->WriteHTML($file_content);
-                    $mpdf->AddPage();
-                    $mpdf->Output($PdfName, 'F');
-                    $attachments[] = $PdfName;
-                }
+                // PDF desativado temporariamente
                 foreach ($emails as $email) {
                     if ($email) {
                         wp_mail($email, $subject, stripslashes($content), array('Content-Type: text/html; charset=UTF-8'), $attachments);
@@ -752,8 +766,13 @@ if (!class_exists('WBE')) {
             // add csv data
             $dataArray = array();
             $to = $from = "";
-            $prodArr = $_POST['booking_exporter_product'];
-            $userArr = $_POST['booking_exporter_user'];
+            // Ensure arrays are always arrays, never null
+            $prodArr = isset($_POST['booking_exporter_product']) && is_array($_POST['booking_exporter_product']) 
+                ? $_POST['booking_exporter_product'] 
+                : array();
+            $userArr = isset($_POST['booking_exporter_user']) && is_array($_POST['booking_exporter_user']) 
+                ? $_POST['booking_exporter_user'] 
+                : array();
             //get from date
             if ($_POST['booking_from_date']) {
                 $from = str_replace('-', '', sanitize_text_field($_POST['booking_from_date'])) . '000000';
@@ -789,20 +808,7 @@ if (!class_exists('WBE')) {
                 unlink($filename);
                 die();
             } elseif ($file_type == "pdf") {//if wanted file was pdf
-                //get content of pdf
-                ob_start();
-                $dataArrays = array_chunk($dataArray,200);
-                require_once(WBE_MODIFY_PLUGIN_PATH . "templates/pdf-template.php");
-                $file_content = ob_get_contents();
-                //clean buffer include mpdf
-                ob_end_clean();
-                
-                //create pdf and download
-               
-                
-                $mpdf->AddPage();
-                $mpdf->Output('booking.pdf', 'D');
-                exit;
+                wp_die(esc_html__('Exportação em PDF desativada temporariamente.', 'wbe-exporter'));
             }
         } */
 
@@ -899,7 +905,11 @@ if (!class_exists('WBE')) {
                 $file_type = sanitize_text_field($_POST['file_type']);
                 
                 // Validate file type
-                $allowed_types = array('csv', 'excel', 'pdf');
+                if ($file_type === 'pdf') {
+                    wp_die(esc_html__('Exportação em PDF desativada temporariamente.', 'wbe-exporter'));
+                }
+
+                $allowed_types = array('csv', 'excel');
                 if (!in_array($file_type, $allowed_types)) {
                     $file_type = "csv";
                 }
@@ -933,8 +943,13 @@ if (!class_exists('WBE')) {
             // add csv data
             $dataArray = array();
             $to = $from = "";
-            $prodArr = $_POST['booking_exporter_product'];
-            $userArr = $_POST['booking_exporter_user'];
+            // Ensure arrays are always arrays, never null
+            $prodArr = isset($_POST['booking_exporter_product']) && is_array($_POST['booking_exporter_product']) 
+                ? $_POST['booking_exporter_product'] 
+                : array();
+            $userArr = isset($_POST['booking_exporter_user']) && is_array($_POST['booking_exporter_user']) 
+                ? $_POST['booking_exporter_user'] 
+                : array();
             //get from date
             if ($_POST['booking_from_date']) {
                 $from = str_replace('-', '', sanitize_text_field($_POST['booking_from_date'])) . '000000';
@@ -1014,19 +1029,6 @@ if (!class_exists('WBE')) {
                 readfile($filename);
                 unlink($filename);
                 die();
-            } elseif ($file_type == "pdf") {
-                //get content of pdf
-                ob_start();
-                $dataArrays = array_chunk($dataArray, 200);
-                require_once(WBE_MODIFY_PLUGIN_PATH . "templates/pdf-template.php");
-                $file_content = ob_get_contents();
-                //clean buffer include mpdf
-                ob_end_clean();
-
-                //create pdf and download
-                $mpdf->AddPage();
-                $mpdf->Output('booking.pdf', 'D');
-                exit;
             }
         }
 
@@ -1036,46 +1038,64 @@ if (!class_exists('WBE')) {
         {
             $catIds = $_POST['catIds'];
             $data = '';
+            
+            // Helper function to format product title with status
+            $format_product_title = function($product) {
+                $title = $product->post_title;
+                if ($product->post_status !== 'publish') {
+                    $status_labels = array(
+                        'draft' => esc_html__(' (Rascunho)', 'wbe-exporter'),
+                        'trash' => esc_html__(' (Excluído)', 'wbe-exporter'),
+                        'pending' => esc_html__(' (Pendente)', 'wbe-exporter'),
+                        'private' => esc_html__(' (Privado)', 'wbe-exporter'),
+                    );
+                    $status_label = isset($status_labels[$product->post_status]) ? $status_labels[$product->post_status] : ' (' . $product->post_status . ')';
+                    $title .= $status_label;
+                }
+                return $title;
+            };
+            
+            // Use optimized direct SQL query instead of get_posts
+            global $wpdb;
+            
             if (in_array('all', $catIds) || $catIds == null) {
                 $data .= '<option value="all" selected>All</option>';
-                $products = get_posts(array(
-                    'post_type' => 'product',
-                    'numberposts' => -1,
-                    'tax_query' => array(
-                        array(
-                            'taxonomy' => 'product_type',
-                            'field' => 'slug',
-                            'terms' => 'booking',
-                        )
-                    ),
-                ));
+                
+                // Optimized query - get from cache or direct SQL
+                $products = $this->get_cached_booking_products();
+                
                 foreach ($products as $product) {
-                    $data .= '<option value="' . esc_attr($product->ID) . '">' . esc_html($product->post_title) . '</option>';
+                    $product_title = $format_product_title($product);
+                    $data .= '<option value="' . esc_attr($product->ID) . '">' . esc_html($product_title) . '</option>';
                 }
             } else {
                 $counter = 0;
-                $products = get_posts(array(
-                    'post_type' => 'product',
-                    'numberposts' => -1,
-                    'tax_query' => array(
-                        'relation' => 'AND',
-                        array(
-                            'taxonomy' => 'product_cat',
-                            'field' => 'id',
-                            'terms' => $catIds,
-                        ),
-                        array(
-                            'taxonomy' => 'product_type',
-                            'field' => 'slug',
-                            'terms' => 'booking',
-                        )
-                    ),
-                ));
+                
+                // Optimized SQL query with category filter
+                $cat_ids_imploded = implode(',', array_map('intval', $catIds));
+                $products = $wpdb->get_results(
+                    "SELECT DISTINCT p.ID, p.post_title, p.post_status 
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->term_relationships} tr1 ON p.ID = tr1.object_id
+                    INNER JOIN {$wpdb->term_taxonomy} tt1 ON tr1.term_taxonomy_id = tt1.term_taxonomy_id
+                    INNER JOIN {$wpdb->terms} t1 ON tt1.term_id = t1.term_id
+                    INNER JOIN {$wpdb->term_relationships} tr2 ON p.ID = tr2.object_id
+                    INNER JOIN {$wpdb->term_taxonomy} tt2 ON tr2.term_taxonomy_id = tt2.term_taxonomy_id
+                    INNER JOIN {$wpdb->terms} t2 ON tt2.term_id = t2.term_id
+                    WHERE p.post_type = 'product'
+                    AND tt1.taxonomy = 'product_type'
+                    AND t1.slug = 'booking'
+                    AND tt2.taxonomy = 'product_cat'
+                    AND t2.term_id IN ($cat_ids_imploded)
+                    ORDER BY p.post_title ASC"
+                );
+                
                 foreach ($products as $product) {
+                    $product_title = $format_product_title($product);
                     if ($counter == 0) {
-                        $data .= '<option value="' . esc_attr($product->ID) . '" selected >' . esc_html($product->post_title) . '</option>';
+                        $data .= '<option value="' . esc_attr($product->ID) . '" selected >' . esc_html($product_title) . '</option>';
                     } else {
-                        $data .= '<option value="' . esc_attr($product->ID) . '">' . esc_html($product->post_title) . '</option>';
+                        $data .= '<option value="' . esc_attr($product->ID) . '">' . esc_html($product_title) . '</option>';
                     }
                     $counter++;
                 }
@@ -1138,10 +1158,73 @@ if (!class_exists('WBE')) {
             return $arr;
         }
         /**
+         * Get product data even if product is deleted or draft
+         * This ensures bookings are exported even when products no longer exist
+         * Works with ALL product statuses: publish, draft, pending, private, trash, etc.
+         */
+        private function get_product_data_fallback($product_id) {
+            global $wpdb;
+            
+            // First, try to get product via WooCommerce (works for published products)
+            $product = wc_get_product($product_id);
+            
+            if ($product && $product->exists()) {
+                return $product;
+            }
+            
+            // If WC doesn't return it, search directly in database for ANY status
+            // This includes: publish, draft, pending, private, trash, etc.
+            $post = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->posts} WHERE ID = %d AND post_type = 'product'",
+                $product_id
+            ));
+            
+            if (!$post) {
+                // Product completely removed from database - create minimal fallback
+                return (object) array(
+                    'id' => $product_id,
+                    'exists' => false,
+                    'is_fallback' => true,
+                    'product_id' => $product_id
+                );
+            }
+            
+            // Product exists but is in draft/trash/etc - create fallback object
+            $fallback = new stdClass();
+            $fallback->id = $product_id;
+            $fallback->product_id = $product_id;
+            $fallback->exists = true;
+            $fallback->is_fallback = true;
+            
+            // Get product data from post and meta
+            $fallback->_post_title = $post->post_title ? $post->post_title : esc_html__('Produto Excluído', 'wbe-exporter');
+            $fallback->_post_status = $post->post_status;
+            $fallback->_sku = get_post_meta($product_id, '_sku', true);
+            
+            // Add status indicator to title if not published
+            if ($post->post_status !== 'publish') {
+                $status_labels = array(
+                    'draft' => esc_html__(' (Rascunho)', 'wbe-exporter'),
+                    'trash' => esc_html__(' (Excluído)', 'wbe-exporter'),
+                    'pending' => esc_html__(' (Pendente)', 'wbe-exporter'),
+                    'private' => esc_html__(' (Privado)', 'wbe-exporter'),
+                );
+                $status_label = isset($status_labels[$post->post_status]) ? $status_labels[$post->post_status] : ' (' . $post->post_status . ')';
+                $fallback->_post_title .= $status_label;
+            }
+            
+            return $fallback;
+        }
+
+        /**
          * Prepare Rows Data
          */
         public function prepare_booking_rows_data($booking_ids, $prodArr, $userArr, $existingArray)
         {
+            // Ensure arrays are always arrays, never null
+            $prodArr = is_array($prodArr) ? $prodArr : array();
+            $userArr = is_array($userArr) ? $userArr : array();
+            $existingArray = is_array($existingArray) ? $existingArray : array();
 
             $dataArray = array();
             $arrchuck = array_chunk($booking_ids, 999);
@@ -1150,21 +1233,54 @@ if (!class_exists('WBE')) {
                 foreach ($booking_idsbatch as $id) {
                     $rowArray = array();
                     $obj = get_wc_booking($id);
-                    $order = wc_get_order($obj->order_id);
-                    $currency = get_woocommerce_currency_symbol();
-                    $productgeting_withouterror = wc_get_product($obj->product_id);
-                    if (!empty($productgeting_withouterror)) {
-                        $product = new WC_Product($obj->product_id);
+                    
+                    if (!$obj) {
+                        continue; // Skip if booking doesn't exist
                     }
+                    
+                    $order = wc_get_order($obj->order_id);
+                    
+                    if (!$order) {
+                        continue; // Skip if order doesn't exist
+                    }
+                    
+                    $currency = get_woocommerce_currency_symbol();
+                    
+                    // Get product data even if deleted or draft
+                    $product = $this->get_product_data_fallback($obj->product_id);
+                    
                     $wc_booking_resource_label = get_post_meta($obj->product_id, 'wc_booking_resource_label', true);
                     $checkresource = get_post_meta($id, '_booking_resource_id', true);
                     if ($checkresource != 0) {
-                        $resources_get_the_title = $wc_booking_resource_label . ': ' . get_the_title($checkresource);
+                        // Get resource from database directly (any status)
+                        global $wpdb;
+                        $resource_post = $wpdb->get_row($wpdb->prepare(
+                            "SELECT post_title, post_status FROM {$wpdb->posts} WHERE ID = %d AND post_type = 'bookable_resource'",
+                            $checkresource
+                        ));
+                        
+                        if ($resource_post) {
+                            $resource_title = $resource_post->post_title;
+                            // Add status indicator if not published
+                            if ($resource_post->post_status !== 'publish') {
+                                $status_labels = array(
+                                    'draft' => esc_html__(' (Rascunho)', 'wbe-exporter'),
+                                    'trash' => esc_html__(' (Excluído)', 'wbe-exporter'),
+                                );
+                                $status_label = isset($status_labels[$resource_post->post_status]) ? $status_labels[$resource_post->post_status] : '';
+                                $resource_title .= $status_label;
+                            }
+                        } else {
+                            $resource_title = esc_html__('Recurso Excluído', 'wbe-exporter');
+                        }
+                        $resources_get_the_title = $wc_booking_resource_label . ': ' . $resource_title;
                     } else {
                         $resources_get_the_title = esc_html__('N/A', 'wbe-exporter');
                     }
                     $user = new \stdClass();
-                    if (!empty($order) and !empty($product)) {
+                    
+                    // Process booking even if product doesn't exist
+                    if (!empty($order)) {
                         if ($obj->customer_id != 0) {
                             $user = get_userdata($obj->customer_id);
                         } else {
@@ -1185,7 +1301,11 @@ if (!class_exists('WBE')) {
                             }
                         }
                         // Create records
-                        if ((in_array('all', $prodArr) || in_array($obj->product_id, $prodArr) || $prodArr == null) && (in_array('all', $userArr) || in_array($obj->customer_id, $userArr) || $userArr == null)) {
+                        // Check if product/user filters match (empty arrays mean "all")
+                        $product_match = (empty($prodArr) || in_array('all', $prodArr) || in_array($obj->product_id, $prodArr));
+                        $user_match = (empty($userArr) || in_array('all', $userArr) || in_array($obj->customer_id, $userArr));
+                        
+                        if ($product_match && $user_match) {
                             $rowArray = array();
                             if (in_array('order_id', $existingArray)) {
                                 $rowArray['order_id'] = $obj->order_id;
@@ -1194,28 +1314,53 @@ if (!class_exists('WBE')) {
                                 $rowArray['order_status'] = $order->get_status();
                             }
                             if (in_array('order_person', $existingArray)) {
-                                $args = array(
-                                    'posts_per_page' => -1,
-                                    'post_type' => 'bookable_person',
-                                    'post_parent' => version_compare(WC_VERSION, '3.0.0', '<') ? $product->id : $product->get_id(),
-                                );
-                                $personsTypes = get_posts($args);
+                                $product_id_for_persons = is_object($product) && method_exists($product, 'get_id') ? $product->get_id() : (isset($product->id) ? $product->id : (isset($product->product_id) ? $product->product_id : $obj->product_id));
+                                
+                                // Get persons directly from database (any status)
+                                global $wpdb;
+                                $personsTypes = $wpdb->get_results($wpdb->prepare(
+                                    "SELECT ID, post_title, post_status FROM {$wpdb->posts} WHERE post_type = 'bookable_person' AND post_parent = %d",
+                                    $product_id_for_persons
+                                ));
+                                
                                 $personsInfo = get_post_meta($id, '_booking_persons', true);
-                                if (count($personsTypes) > 0 or count($personsInfo) > 0) {
+                                if ((is_array($personsTypes) && count($personsTypes) > 0) || (is_array($personsInfo) && count($personsInfo) > 0)) {
                                     $infoArr = array();
                                     $personsInfo = get_post_meta($id, '_booking_persons', true);
-                                    foreach ($personsInfo as $key => $value) {
-                                        if ($key != 0) {
-                                            $infoArr[] = get_the_title($key) . ': ' . $value;
-                                        } else {
-                                            $sing = null;
-                                            if ($value > 1) {
-                                                $sing = 's';
+                                    if (is_array($personsInfo)) {
+                                        foreach ($personsInfo as $key => $value) {
+                                            if ($key != 0) {
+                                                // Get person from database directly (any status)
+                                                $person_post = $wpdb->get_row($wpdb->prepare(
+                                                    "SELECT post_title, post_status FROM {$wpdb->posts} WHERE ID = %d AND post_type = 'bookable_person'",
+                                                    $key
+                                                ));
+                                                
+                                                if ($person_post) {
+                                                    $person_title = $person_post->post_title;
+                                                    // Add status indicator if not published
+                                                    if ($person_post->post_status !== 'publish') {
+                                                        $status_labels = array(
+                                                            'draft' => esc_html__(' (Rascunho)', 'wbe-exporter'),
+                                                            'trash' => esc_html__(' (Excluído)', 'wbe-exporter'),
+                                                        );
+                                                        $status_label = isset($status_labels[$person_post->post_status]) ? $status_labels[$person_post->post_status] : '';
+                                                        $person_title .= $status_label;
+                                                    }
+                                                } else {
+                                                    $person_title = esc_html__('Pessoa Excluída', 'wbe-exporter');
+                                                }
+                                                $infoArr[] = $person_title . ': ' . $value;
+                                            } else {
+                                                $sing = null;
+                                                if ($value > 1) {
+                                                    $sing = 's';
+                                                }
+                                                $infoArr[] = 'Person' . $sing . ' : ' . $value;
                                             }
-                                            $infoArr[] = 'Person' . $sing . ' : ' . $value;
                                         }
                                     }
-                                    $rowArray['order_person'] = implode(' - ', $infoArr);
+                                    $rowArray['order_person'] = !empty($infoArr) ? implode(' - ', $infoArr) : esc_html__('N/A', 'wbe-exporter');
                                 } else {
                                     $rowArray['order_person'] = esc_html__('N/A', 'wbe-exporter');
                                 }
@@ -1389,24 +1534,48 @@ if (!class_exists('WBE')) {
                                 }
                             }
                             if (in_array('product_id', $existingArray)) {
-                                $rowArray['product_id'] = version_compare(WC_VERSION, '3.0.0', '<') ? $product->id : $product->get_id();
+                                if (is_object($product) && method_exists($product, 'get_id')) {
+                                    $rowArray['product_id'] = $product->get_id();
+                                } elseif (isset($product->id)) {
+                                    $rowArray['product_id'] = $product->id;
+                                } elseif (isset($product->product_id)) {
+                                    $rowArray['product_id'] = $product->product_id;
+                                } else {
+                                    $rowArray['product_id'] = $obj->product_id;
+                                }
                             }
                             if (in_array('product_name', $existingArray)) {
-                                $rowArray['product_name'] = $product->get_title();
+                                if (is_object($product) && method_exists($product, 'get_title')) {
+                                    $rowArray['product_name'] = $product->get_title();
+                                } elseif (isset($product->_post_title)) {
+                                    // Fallback product
+                                    $rowArray['product_name'] = $product->_post_title;
+                                } else {
+                                    // Last resort: get from post directly
+                                    $product_post = get_post($obj->product_id);
+                                    $rowArray['product_name'] = $product_post ? $product_post->post_title : esc_html__('Produto Excluído', 'wbe-exporter');
+                                }
                             }
                             if (in_array('product_sku', $existingArray)) {
-                                if ($product->get_sku()) {
-                                    $rowArray['product_sku'] = $product->get_sku();
+                                $sku = '';
+                                if (is_object($product) && method_exists($product, 'get_sku')) {
+                                    $sku = $product->get_sku();
+                                } elseif (isset($product->_sku)) {
+                                    // Fallback product
+                                    $sku = $product->_sku;
                                 } else {
-                                    $rowArray['product_sku'] = esc_html__('N/A', 'wbe-exporter');
+                                    // Last resort: get from post meta directly
+                                    $sku = get_post_meta($obj->product_id, '_sku', true);
                                 }
+                                $rowArray['product_sku'] = $sku ? $sku : esc_html__('N/A', 'wbe-exporter');
                             }
                             if (in_array('product_res', $existingArray)) {
                                 $rowArray['product_res'] = $resources_get_the_title;
                             }
                             if (in_array('product_addon', $existingArray)) {
-                                $addonsArr = get_post_meta(version_compare(WC_VERSION, '3.0.0', '<') ? $product->id : $product->get_id(), '_product_addons', true);
-                                if ($addonsArr != false && count($addonsArr) > 0) {
+                                $product_id_for_addons = is_object($product) && method_exists($product, 'get_id') ? $product->get_id() : (isset($product->id) ? $product->id : (isset($product->product_id) ? $product->product_id : $obj->product_id));
+                                $addonsArr = get_post_meta($product_id_for_addons, '_product_addons', true);
+                                if ($addonsArr != false && is_array($addonsArr) && count($addonsArr) > 0) {
                                     if (version_compare(WC_VERSION, '3.0.0', '<')) {
                                         $typesArr = array();
                                         $itemsArr = array();
@@ -1457,12 +1626,13 @@ if (!class_exists('WBE')) {
                                 }
                             }
                             if (in_array('product_vendor', $existingArray)) {
+                                $product_id_for_vendor = is_object($product) && method_exists($product, 'get_id') ? $product->get_id() : (isset($product->id) ? $product->id : (isset($product->product_id) ? $product->product_id : $obj->product_id));
                                 if (version_compare(WC_VERSION, '3.0.0', '<')) {
-                                    $terms = wp_get_post_terms($product->id, 'shop_vendor');
+                                    $terms = wp_get_post_terms($product_id_for_vendor, 'shop_vendor');
                                 } else {
-                                    $terms = wp_get_post_terms($product->get_id(), 'wcpv_product_vendors');
+                                    $terms = wp_get_post_terms($product_id_for_vendor, 'wcpv_product_vendors');
                                 }
-                                if (count($terms) > 0) {
+                                if (is_array($terms) && count($terms) > 0) {
                                     $vendorsArr = array();
                                     foreach ($terms as $vendor) {
                                         $vendorsArr[] = $vendor->name;

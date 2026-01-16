@@ -11,10 +11,40 @@
                 <select id="export_category" class="chosen-select" style="width: 33%;" name="booking_exporter_category[]" multiple>
                     <option value="all" selected><?php esc_html_e('All','wbe-exporter'); ?></option>
                     <?php
-                    $cats = get_terms('product_cat');
-                    foreach($cats as $cat){ ?>
-                        <option value="<?php esc_attr_e($cat->term_id); ?>"><?php echo esc_html($cat->name); ?></option>
-                    <?php } ?>
+                    // Optimized: Only get categories that have booking products
+                    global $wpdb;
+                    $cats = $wpdb->get_results(
+                        "SELECT DISTINCT t.term_id, t.name 
+                        FROM {$wpdb->terms} t
+                        INNER JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+                        INNER JOIN {$wpdb->term_relationships} tr ON tt.term_taxonomy_id = tr.term_taxonomy_id
+                        INNER JOIN {$wpdb->posts} p ON tr.object_id = p.ID
+                        INNER JOIN {$wpdb->term_relationships} tr2 ON p.ID = tr2.object_id
+                        INNER JOIN {$wpdb->term_taxonomy} tt2 ON tr2.term_taxonomy_id = tt2.term_taxonomy_id
+                        INNER JOIN {$wpdb->terms} t2 ON tt2.term_id = t2.term_id
+                        WHERE tt.taxonomy = 'product_cat'
+                        AND p.post_type = 'product'
+                        AND tt2.taxonomy = 'product_type'
+                        AND t2.slug = 'booking'
+                        ORDER BY t.name ASC"
+                    );
+                    
+                    if ($cats) {
+                        foreach($cats as $cat){ ?>
+                            <option value="<?php echo esc_attr($cat->term_id); ?>"><?php echo esc_html($cat->name); ?></option>
+                        <?php }
+                    } else {
+                        // Fallback to all categories if query fails
+                        $cats = get_terms(array(
+                            'taxonomy' => 'product_cat',
+                            'hide_empty' => false,
+                            'number' => 500 // Limit to 500 categories
+                        ));
+                        foreach($cats as $cat){ ?>
+                            <option value="<?php echo esc_attr($cat->term_id); ?>"><?php echo esc_html($cat->name); ?></option>
+                        <?php }
+                    }
+                    ?>
                 </select>
             </li>
             <li>
@@ -22,20 +52,33 @@
                 <select id="export_product" class="chosen-select" style="width: 33%;" name="booking_exporter_product[]" multiple>
                     <option value="all" selected><?php esc_html_e('All','wbe-exporter'); ?></option>
                     <?php
-                    $products = get_posts(array(
-                        'post_type' => 'product',
-                        'numberposts' => -1,
-                        'tax_query' => array(
-                            array(
-                                'taxonomy' => 'product_type',
-                                'field' => 'slug',
-                                'terms' => 'booking',
-                            ),
-                        ),
-                    ));
-                    foreach ($products as $product) { ?>
-                        <option value="<?php esc_attr_e($product->ID); ?>"><?php echo esc_html($product->post_title); ?></option>
-                    <?php } ?>
+                    // Use optimized cached query
+                    global $wbe;
+                    if (!$wbe) {
+                        $wbe = new WBE();
+                    }
+                    $products = $wbe->get_cached_booking_products();
+                    
+                    if ($products) {
+                        foreach ($products as $product) {
+                            $product_title = $product->post_title;
+                            // Add status indicator if not published
+                            if ($product->post_status !== 'publish') {
+                                $status_labels = array(
+                                    'draft' => esc_html__(' (Rascunho)', 'wbe-exporter'),
+                                    'trash' => esc_html__(' (Excluído)', 'wbe-exporter'),
+                                    'pending' => esc_html__(' (Pendente)', 'wbe-exporter'),
+                                    'private' => esc_html__(' (Privado)', 'wbe-exporter'),
+                                );
+                                $status_label = isset($status_labels[$product->post_status]) ? $status_labels[$product->post_status] : ' (' . $product->post_status . ')';
+                                $product_title .= $status_label;
+                            }
+                        ?>
+                            <option value="<?php echo esc_attr($product->ID); ?>"><?php echo esc_html($product_title); ?></option>
+                        <?php 
+                        }
+                    }
+                    ?>
                 </select>
             </li>
             <li>
@@ -43,10 +86,32 @@
                 <select style="width: 33%;" class="chosen-select" name="booking_exporter_user[]" multiple>
                     <option value="all" selected><?php esc_html_e('All', 'wbe-exporter') ?></option>
                     <?php
-                    $users = get_users();
-                    foreach ($users as $user) { ?>
-                        <option value="<?php esc_attr_e($user->ID); ?>"><?php echo esc_html($user->user_nicename); ?></option>
-                    <?php } ?>
+                    // Optimized: Only get users who have orders (much faster)
+                    global $wpdb;
+                    $users_with_orders = $wpdb->get_results(
+                        "SELECT DISTINCT u.ID, u.user_nicename 
+                        FROM {$wpdb->users} u
+                        INNER JOIN {$wpdb->postmeta} pm ON u.ID = pm.meta_value
+                        WHERE pm.meta_key = '_customer_user'
+                        ORDER BY u.user_nicename ASC
+                        LIMIT 1000"
+                    );
+                    
+                    if ($users_with_orders) {
+                        foreach ($users_with_orders as $user) { ?>
+                            <option value="<?php echo esc_attr($user->ID); ?>"><?php echo esc_html($user->user_nicename); ?></option>
+                        <?php }
+                    } else {
+                        // Fallback: get limited users if no orders found
+                        $users = get_users(array(
+                            'number' => 500, // Limit to 500 users
+                            'fields' => array('ID', 'user_nicename') // Only get needed fields
+                        ));
+                        foreach ($users as $user) { ?>
+                            <option value="<?php echo esc_attr($user->ID); ?>"><?php echo esc_html($user->user_nicename); ?></option>
+                        <?php }
+                    }
+                    ?>
                 </select>
             </li>
             <?php if (in_array('woocommerce-product-vendors/woocommerce-product-vendors.php', apply_filters('active_plugins', get_option('active_plugins')))) { ?>
@@ -221,14 +286,14 @@
     <p>
         <input type="submit" class="button-primary submit_btn export_csv" value="📄 <?php esc_html_e('Export CSV', 'wbe-exporter') ?>" />
         <input type="submit" class="button-primary submit_btn export_excel" value="📊 <?php esc_html_e('Export Excel', 'wbe-exporter') ?>" />
-        <input type="submit" class="button-primary submit_btn export_pdf" value="📑 <?php esc_html_e('Export PDF', 'wbe-exporter') ?>" />
+        <?php /* PDF desativado temporariamente */ ?>
 
         <input type="button" class="button-primary ajaxified_csv_export" value="🚀 <?php esc_html_e('Export CSV (1000+)', 'wbe-exporter') ?>" />
     </p>
     
     <div class="wbe-info-box" style="background: #dbeafe; border: 2px solid #2563eb; border-left: 5px solid #1e40af; padding: 16px 20px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);">
         <p style="margin: 0; font-size: 14px; color: #1e3a8a; font-weight: 600;">
-            <strong style="font-size: 16px;">💡 Dica:</strong> Use <strong style="color: #059669;">CSV</strong> para compatibilidade universal, <strong style="color: #2563eb;">Excel</strong> para análise de dados, ou <strong style="color: #dc2626;">PDF</strong> para relatórios finais.
+            <strong style="font-size: 16px;">💡 Dica:</strong> Use <strong style="color: #059669;">CSV</strong> para compatibilidade universal ou <strong style="color: #2563eb;">Excel</strong> para análise de dados.
         </p>
     </div>
 

@@ -31,15 +31,22 @@
             </td>
         </tr>
         <?php 
-            $filter_dates = get_option('wc_bookings_filter_date_schedule_email', true);
-            $checked  = isset($filter_dates['now_on']) && $filter_dates['now_on'] == 1 ? 'checked' : "";
-            $to_value = isset($filter_dates['now_on']) && empty($filter_dates['now_on']) ? $filter_dates['to_value'] : "";
+            $filter_dates = get_option('wc_bookings_filter_date_schedule_email', array());
+            if (!is_array($filter_dates)) {
+                $filter_dates = array();
+            }
+
+            $now_on = !empty($filter_dates['now_on']);
+            $checked = $now_on ? 'checked' : '';
+
+            $from_value = $now_on ? '' : (isset($filter_dates['from_value']) ? $filter_dates['from_value'] : '');
+            $to_value   = $now_on ? '' : (isset($filter_dates['to_value']) ? $filter_dates['to_value'] : '');
         ?> 
         <tr valign="top">
             <th scope="row"><?php echo __('Filter by Date', 'wbe-exporter'); ?></th>
             <td>
                 <span><?php esc_html_e('From', 'wbe-exporter');?></span>
-                <input type="date" name="email_booking_from_date" value="<?php echo esc_attr($filter_dates['from_value']); ?>">
+                <input type="date" name="email_booking_from_date" value="<?php echo esc_attr($from_value); ?>">
                 <span><?php esc_html_e('To', 'wbe-exporter');?></span>
                 <input type="date" name="email_booking_to_date" value="<?php echo esc_attr($to_value); ?>">
                 <input type="checkbox" name="now_on" value="now_on" <?php echo esc_attr($checked); ?>>
@@ -77,7 +84,10 @@
             <th scope="row"><?php esc_html_e('Template', 'wbe-exporter') ?>: </th>
             <td>
             <?php 
-                $saved_templates = get_option("booking_exporter_templates", true);
+                $saved_templates = get_option("booking_exporter_templates", array());
+                if (!is_array($saved_templates)) {
+                    $saved_templates = array();
+                }
                 $template_option = get_option("template-cron-email");
             ?>
             <select name="template-cron-email">
@@ -103,9 +113,14 @@
         <tr valign="top">
             <th scope="row"><?php esc_html_e('Attached Files To Email', 'wbe-exporter'); ?>:</th>
             <?php
-            $sent=array();
-            if(get_option('wc_booking_email_sent_attachment'))
-                $sent= json_decode(get_option('wc_booking_email_sent_attachment')); ?>
+            $sent = array();
+            $sent_raw = get_option('wc_booking_email_sent_attachment');
+            if (!empty($sent_raw)) {
+                $sent = json_decode($sent_raw, true);
+                if (!is_array($sent)) {
+                    $sent = array();
+                }
+            } ?>
             <td>
                 <input type="checkbox" value="pdf" id="sent_attachment_pdf" class="sent_attachment_pdf" name="sent_attachment[]" <?php echo (in_array("pdf", $sent)) ? "checked" : ""; ?>>
                 <label for="sent_attachment_pdf"><?php esc_html_e('PDF', 'wbe-exporter'); ?></label>

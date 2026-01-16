@@ -12,7 +12,7 @@
                     <li>
                         <input type="checkbox" name="<?php echo esc_attr($template_name); ?>" id="<?php echo esc_attr($template_name); ?>" class="<?php echo esc_attr($template_name); ?>">    
                         <label for="<?php echo esc_attr($template_name); ?>"><?php echo esc_html($template_name_show); ?></label>
-                        <a href="#" id="wbe-delete-template" class="wbe-delete-template" title="Delete Template"><span class="dashicons dashicons-trash"></span></a>
+                        <a href="#" class="wbe-delete-template" title="Delete Template" data-template="<?php echo esc_attr($template_name); ?>"><span class="dashicons dashicons-trash"></span></a>
                     </li>     
                 <?php } ?>
             </ul>
